@@ -1,0 +1,37 @@
+name: Build OrionShim Dylib
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-dylib:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Compile OrionShim for arm64 iOS
+        run: |
+          mkdir -p output
+          xcrun -sdk iphoneos clang -dynamiclib \
+            -arch arm64 \
+            -miphoneos-version-min=15.0 \
+            -fobjc-arc \
+            -framework Foundation \
+            -install_name @rpath/OrionShim.dylib \
+            -o output/OrionShim.dylib \
+            OrionShim/OrionShim.m
+          
+          echo "Compiled successfully:"
+          ls -la output/OrionShim.dylib
+          file output/OrionShim.dylib
+
+      - name: Upload OrionShim Dylib Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OrionShim-dylib
+          path: output/OrionShim.dylib
+          retention-days: 7
