@@ -1,0 +1,54 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode Version
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Build and Package App Bundle
+        run: |
+          mkdir -p build/Payload
+          
+          # Build with xcodebuild using generic iOS device destination
+          xcodebuild build \
+            -scheme DopplerClone \
+            -destination "generic/platform=iOS" \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            BUILD_DIR="$(pwd)/build/derived"
+          
+          # Find the built .app product
+          APP_PATH=$(find build/derived -name "*.app" -type d | head -n 1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: .app file not found"
+            exit 1
+          fi
+          
+          echo "Found app at: $APP_PATH"
+          cp -R "$APP_PATH" build/Payload/
+          
+          # Package into IPA
+          cd build
+          zip -r DopplerClone.ipa Payload
+          cd ..
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DopplerClone-iOS-IPA
+          path: build/DopplerClone.ipa
+          retention-days: 7
