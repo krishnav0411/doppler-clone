@@ -25,15 +25,6 @@
 }
 @end
 
-static void swizzle_method(Class cls, SEL origSel, SEL swizSel) {
-    if (!cls) return;
-    Method origMethod = class_getInstanceMethod(cls, origSel);
-    Method swizMethod = class_getInstanceMethod(cls, swizSel);
-    if (origMethod && swizMethod) {
-        method_exchangeImplementations(origMethod, swizMethod);
-    }
-}
-
 static void replace_method_with_block(Class cls, SEL sel, const char *types, id block) {
     if (!cls) return;
     IMP newImp = imp_implementationWithBlock(block);
@@ -64,6 +55,21 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
 }
 @end
 
+@interface NSUserDefaults (OrionFlags)
+@end
+
+@implementation NSUserDefaults (OrionFlags)
+- (BOOL)orion_boolForKey:(NSString *)defaultName {
+    if ([defaultName isEqualToString:@"DOPPLER_IGNORE_ENTITLEMENTS"]) {
+        return YES;
+    }
+    if ([defaultName isEqualToString:@"DOPPLER_SHOW_ONBOARDING"]) {
+        return NO;
+    }
+    return [self orion_boolForKey:defaultName];
+}
+@end
+
 @interface UIViewController (OrionTrialBypass)
 @end
 
@@ -86,20 +92,6 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
     [self orion_presentViewController:viewControllerToPresent animated:flag completion:completion];
 }
 
-- (void)orion_viewWillAppear:(BOOL)animated {
-    NSString *clsName = NSStringFromClass([self class]);
-    if ([clsName containsString:@"StartTrial"] ||
-        [clsName containsString:@"TrialRemaining"] ||
-        [clsName containsString:@"TryDoppler"] ||
-        [clsName containsString:@"V3UpgradeStartTrial"]) {
-        NSLog(@"[OrionShim] Suppressed viewWillAppear for trial controller: %@", clsName);
-        [self.navigationController popViewControllerAnimated:NO];
-        [self dismissViewControllerAnimated:NO completion:nil];
-        return;
-    }
-    [self orion_viewWillAppear:animated];
-}
-
 @end
 
 @interface OrionShim : NSObject
@@ -110,7 +102,20 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
 + (void)load {
     NSLog(@"[OrionShim] Activating Orion runtime shims and rebranding...");
     
-    // 1. Hook NSFileManager containerURLForSecurityApplicationGroupIdentifier:
+    // 1. Force developer flags in NSUserDefaults to ignore entitlements and skip onboarding
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"DOPPLER_IGNORE_ENTITLEMENTS"];
+    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"DOPPLER_SHOW_ONBOARDING"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    
+    Class udClass = [NSUserDefaults class];
+    Method mOrigBool = class_getInstanceMethod(udClass, @selector(boolForKey:));
+    Method mSwizBool = class_getInstanceMethod(udClass, @selector(orion_boolForKey:));
+    if (mOrigBool && mSwizBool) {
+        method_exchangeImplementations(mOrigBool, mSwizBool);
+        NSLog(@"[OrionShim] Successfully hooked NSUserDefaults boolForKey:");
+    }
+    
+    // 2. Hook NSFileManager containerURLForSecurityApplicationGroupIdentifier:
     Class fmClass = [NSFileManager class];
     SEL origFM = @selector(containerURLForSecurityApplicationGroupIdentifier:);
     SEL swizFM = @selector(orion_containerURLForSecurityApplicationGroupIdentifier:);
@@ -124,7 +129,7 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
         }
     }
     
-    // 2. Hook INVocabulary sharedVocabulary to suppress Siri entitlement crash on free developer accounts
+    // 3. Hook INVocabulary sharedVocabulary to suppress Siri entitlement crash
     Class vocabClass = NSClassFromString(@"INVocabulary");
     if (vocabClass) {
         SEL origVocab = @selector(sharedVocabulary);
@@ -141,7 +146,7 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
         }
     }
     
-    // 3. Hook NSBundle localizedStringForKey:value:table: for dynamic UI rebranding
+    // 4. Hook NSBundle localizedStringForKey:value:table: for dynamic UI rebranding
     Class bundleClass = [NSBundle class];
     Method mOrigBundle = class_getInstanceMethod(bundleClass, @selector(localizedStringForKey:value:table:));
     Method mSwizBundle = class_getInstanceMethod([NSBundle class], @selector(orion_localizedStringForKey:value:table:));
@@ -150,7 +155,7 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
         NSLog(@"[OrionShim] Successfully hooked NSBundle localization");
     }
     
-    // 4. Hook UIViewController presentViewController:animated:completion: and viewWillAppear:
+    // 5. Hook UIViewController presentViewController:animated:completion:
     Class vcClass = [UIViewController class];
     Method mOrigPresent = class_getInstanceMethod(vcClass, @selector(presentViewController:animated:completion:));
     Method mSwizPresent = class_getInstanceMethod(vcClass, @selector(orion_presentViewController:animated:completion:));
@@ -159,17 +164,8 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
         NSLog(@"[OrionShim] Successfully hooked presentViewController");
     }
     
-    Method mOrigAppear = class_getInstanceMethod(vcClass, @selector(viewWillAppear:));
-    Method mSwizAppear = class_getInstanceMethod(vcClass, @selector(orion_viewWillAppear:));
-    if (mOrigAppear && mSwizAppear) {
-        method_exchangeImplementations(mOrigAppear, mSwizAppear);
-        NSLog(@"[OrionShim] Successfully hooked viewWillAppear");
-    }
-    
-    // 5. Hook Entitlements and Purchases to unlock permanent access
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self hookEntitlements];
-    });
+    // 6. Hook Entitlements and Purchases immediately
+    [self hookEntitlements];
 }
 
 + (void)hookEntitlements {
@@ -189,10 +185,13 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
         });
     }
     
-    // Hook TrialManager
+    // Hook TrialManager - ALWAYS return in trial period with 100-year validity
     Class trialMgrClass = NSClassFromString(@"_TtC11Doppler_iOS12TrialManager");
     if (trialMgrClass) {
         replace_method_with_block(trialMgrClass, NSSelectorFromString(@"isInTrialPeriod"), "B@:", ^BOOL(id self) {
+            return YES;
+        });
+        replace_method_with_block(trialMgrClass, NSSelectorFromString(@"cannotRestartExpiredTrial"), "B@:", ^BOOL(id self) {
             return NO;
         });
         replace_method_with_block(trialMgrClass, NSSelectorFromString(@"freeTrialUntilDate"), "@@:", ^id(id self) {
