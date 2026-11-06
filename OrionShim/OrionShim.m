@@ -44,6 +44,11 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
     NSString *orig = [self orion_localizedStringForKey:key value:value table:tableName];
     if (!orig) return orig;
     
+    // Suppress trial time remaining notice completely
+    if ([key isEqualToString:@"TRIAL_TIME_REMAINING"] || [key isEqualToString:@"TRIAL_EXPIRED_MESSAGE"] || [key isEqualToString:@"TRIAL_EXTEND_HINT"]) {
+        return @"";
+    }
+    
     NSString *result = orig;
     if ([result containsString:@"Doppler"]) {
         result = [result stringByReplacingOccurrencesOfString:@"Doppler" withString:@"Orion"];
@@ -164,7 +169,7 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
         NSLog(@"[OrionShim] Successfully hooked presentViewController");
     }
     
-    // 6. Hook Entitlements and Purchases immediately
+    // 6. Hook Entitlements, Purchases and suppress Notice banners immediately
     [self hookEntitlements];
 }
 
@@ -185,7 +190,7 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
         });
     }
     
-    // Hook TrialManager - ALWAYS return in trial period with 100-year validity
+    // Hook TrialManager - permanent active, never expired
     Class trialMgrClass = NSClassFromString(@"_TtC11Doppler_iOS12TrialManager");
     if (trialMgrClass) {
         replace_method_with_block(trialMgrClass, NSSelectorFromString(@"isInTrialPeriod"), "B@:", ^BOOL(id self) {
@@ -207,6 +212,36 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
         });
         replace_method_with_block(plusVMClass, NSSelectorFromString(@"_isLoading"), "B@:", ^BOOL(id self) {
             return NO;
+        });
+    }
+    
+    // Hook LibraryNoticeManager to completely hide the trial notice banner
+    Class noticeMgrClass = NSClassFromString(@"_TtC11Doppler_iOS20LibraryNoticeManager");
+    if (noticeMgrClass) {
+        replace_method_with_block(noticeMgrClass, NSSelectorFromString(@"currentNoticeType"), "@@:", ^id(id self) {
+            return nil;
+        });
+    }
+    
+    // Hook WrappedLibraryDataSource to hide notice header
+    NSArray *dataSourceClasses = @[
+        @"_TtC11Doppler_iOS24WrappedLibraryDataSource",
+        @"WrappedLibraryDataSource"
+    ];
+    for (NSString *dName in dataSourceClasses) {
+        Class d = NSClassFromString(dName);
+        if (d) {
+            replace_method_with_block(d, NSSelectorFromString(@"isShowingNoticeHeader"), "B@:", ^BOOL(id self) {
+                return NO;
+            });
+        }
+    }
+    
+    // Suppress NoticeCollectionViewListCell height if requested
+    Class noticeCellClass = NSClassFromString(@"_TtC11Doppler_iOS28NoticeCollectionViewListCell");
+    if (noticeCellClass) {
+        replace_method_with_block(noticeCellClass, @selector(systemLayoutSizeFittingSize:), "{CGSize=dd}@:{CGSize=dd}", ^CGSize(id self, CGSize targetSize) {
+            return CGSizeZero;
         });
     }
     
@@ -252,7 +287,7 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
         }
     }
     
-    NSLog(@"[OrionShim] Entitlement hooks successfully applied.");
+    NSLog(@"[OrionShim] Entitlement and notice suppression hooks successfully applied.");
 }
 
 + (id)orion_sharedVocabulary {
