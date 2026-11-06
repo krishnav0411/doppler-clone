@@ -1,6 +1,4 @@
 import SwiftUI
-import DopplerCore
-import DopplerUI
 
 @main
 struct DopplerCloneApp: App {

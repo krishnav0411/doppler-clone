@@ -1,5 +1,4 @@
 import SwiftUI
-import DopplerCore
 
 public struct LibraryView: View {
     @ObservedObject var library: MusicLibraryManager

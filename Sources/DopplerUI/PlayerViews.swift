@@ -1,5 +1,4 @@
 import SwiftUI
-import DopplerCore
 
 public struct MiniPlayerView: View {
     @ObservedObject var player: AudioPlayerEngine
