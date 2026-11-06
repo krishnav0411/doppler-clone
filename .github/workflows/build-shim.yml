@@ -22,6 +22,7 @@ jobs:
             -fobjc-arc \
             -framework Foundation \
             -framework UIKit \
+            -framework CoreGraphics \
             -install_name @rpath/OrionShim.dylib \
             -o output/OrionShim.dylib \
             OrionShim/OrionShim.m

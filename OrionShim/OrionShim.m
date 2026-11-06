@@ -200,7 +200,7 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
             return NO;
         });
         replace_method_with_block(trialMgrClass, NSSelectorFromString(@"freeTrialUntilDate"), "@@:", ^id(id self) {
-            return [NSDate dateWithTimeIntervalSinceNow:100 * 365 * 86400];
+            return [NSDate dateWithTimeIntervalSinceNow:(NSTimeInterval)(100.0 * 365.0 * 86400.0)];
         });
     }
     
@@ -241,7 +241,7 @@ static void replace_method_with_block(Class cls, SEL sel, const char *types, id 
     Class noticeCellClass = NSClassFromString(@"_TtC11Doppler_iOS28NoticeCollectionViewListCell");
     if (noticeCellClass) {
         replace_method_with_block(noticeCellClass, @selector(systemLayoutSizeFittingSize:), "{CGSize=dd}@:{CGSize=dd}", ^CGSize(id self, CGSize targetSize) {
-            return CGSizeZero;
+            return CGSizeMake(0.0, 0.0);
         });
     }
     
