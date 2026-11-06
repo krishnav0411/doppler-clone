@@ -67,7 +67,7 @@ public struct LibraryView: View {
                         }
                     }
                 }
-                .navigationTitle("Doppler")
+                .navigationTitle("Orion")
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
                         Button(action: {

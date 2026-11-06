@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct DopplerCloneApp: App {
+struct OrionApp: App {
     @StateObject private var library = MusicLibraryManager.shared
     @StateObject private var player = AudioPlayerEngine.shared
 

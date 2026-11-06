@@ -24,8 +24,8 @@ jobs:
           mkdir -p build/Payload
           
           xcodebuild build \
-            -project DopplerClone.xcodeproj \
-            -scheme DopplerClone \
+            -project Orion.xcodeproj \
+            -scheme Orion \
             -destination "generic/platform=iOS" \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
@@ -33,7 +33,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             BUILD_DIR="$(pwd)/build/derived"
           
-          APP_PATH=$(find build/derived -name "DopplerClone.app" -type d | head -n 1)
+          APP_PATH=$(find build/derived -name "Orion.app" -type d | head -n 1)
           
           if [ -z "$APP_PATH" ]; then
             APP_PATH=$(find build/derived -name "*.app" -type d | head -n 1)
@@ -48,12 +48,12 @@ jobs:
           cp -R "$APP_PATH" build/Payload/
           
           cd build
-          zip -r DopplerClone.ipa Payload
+          zip -r Orion.ipa Payload
           cd ..
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DopplerClone-iOS-IPA
-          path: build/DopplerClone.ipa
+          name: Orion-iOS-IPA
+          path: build/Orion.ipa
           retention-days: 7
