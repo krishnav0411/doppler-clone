@@ -7,20 +7,19 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-13
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Select Xcode Version
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
 
       - name: Build and Package App Bundle
         run: |
           mkdir -p build/Payload
           
-          # Build with xcodebuild using generic iOS device destination
           xcodebuild build \
             -scheme DopplerClone \
             -destination "generic/platform=iOS" \
@@ -30,7 +29,6 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             BUILD_DIR="$(pwd)/build/derived"
           
-          # Find the built .app product
           APP_PATH=$(find build/derived -name "*.app" -type d | head -n 1)
           
           if [ -z "$APP_PATH" ]; then
@@ -41,7 +39,6 @@ jobs:
           echo "Found app at: $APP_PATH"
           cp -R "$APP_PATH" build/Payload/
           
-          # Package into IPA
           cd build
           zip -r DopplerClone.ipa Payload
           cd ..
